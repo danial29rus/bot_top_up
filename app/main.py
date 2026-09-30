@@ -9,6 +9,7 @@ from pathlib import Path
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, Message
@@ -836,11 +837,15 @@ async def main() -> None:
     settings = load_settings()
     db = Database(settings.database_path)
     await db.init()
-    resell = ResellClient(settings.resell_api_key)
+    resell = ResellClient(settings.resell_api_key, proxy=settings.outbound_proxy)
     await resell.start()
-    pricing = PricingService(resell, settings.markup_percent, settings.rub_price_rounding)
+    pricing = PricingService(resell, settings.markup_percent, settings.rub_price_rounding, proxy=settings.outbound_proxy)
     await pricing.start()
-    bot = Bot(settings.bot_token, default=DefaultBotProperties(parse_mode="HTML"))
+    bot = Bot(
+        settings.bot_token,
+        session=AiohttpSession(proxy=settings.outbound_proxy),
+        default=DefaultBotProperties(parse_mode="HTML"),
+    )
     dispatcher = Dispatcher()
     dispatcher.include_router(router)
     polling_task = asyncio.create_task(poll_orders(bot))

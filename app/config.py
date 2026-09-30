@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
@@ -20,6 +21,7 @@ class Settings:
     topup_banner_path: str
     cabinet_banner_path: str
     rub_price_rounding: int
+    outbound_proxy: str | None
 
 
 def load_settings() -> Settings:
@@ -27,6 +29,15 @@ def load_settings() -> Settings:
     missing = [key for key in ("BOT_TOKEN", "RESELL_API_KEY") if not os.getenv(key)]
     if missing:
         raise RuntimeError("Не заданы переменные: " + ", ".join(missing))
+    proxy = os.getenv("OUTBOUND_PROXY", "").strip() or None
+    if proxy:
+        parsed = urlparse(proxy)
+        try:
+            port = parsed.port
+        except ValueError:
+            port = None
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname or not port:
+            raise RuntimeError("OUTBOUND_PROXY должен иметь вид http://host:port или http://login:password@host:port")
     return Settings(
         bot_token=os.environ["BOT_TOKEN"],
         resell_api_key=os.environ["RESELL_API_KEY"],
@@ -40,4 +51,5 @@ def load_settings() -> Settings:
         topup_banner_path=os.getenv("TOPUP_BANNER_PATH", "/app/assets/topup-banner.png"),
         cabinet_banner_path=os.getenv("CABINET_BANNER_PATH", "/app/assets/cabinet-banner.png"),
         rub_price_rounding=max(1, int(os.getenv("RUB_PRICE_ROUNDING", "10"))),
+        outbound_proxy=proxy,
     )

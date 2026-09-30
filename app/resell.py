@@ -13,12 +13,13 @@ class ResellError(RuntimeError):
 class ResellClient:
     base_url = "https://resell.codes/api/v1"
 
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, proxy: str | None = None):
         self.headers = {"Authorization": f"Bearer {api_key}"}
+        self.proxy = proxy
         self.session: aiohttp.ClientSession | None = None
 
     async def start(self) -> None:
-        self.session = aiohttp.ClientSession(headers=self.headers, timeout=aiohttp.ClientTimeout(total=25))
+        self.session = aiohttp.ClientSession(headers=self.headers, timeout=aiohttp.ClientTimeout(total=25), proxy=self.proxy)
 
     async def close(self) -> None:
         if self.session:

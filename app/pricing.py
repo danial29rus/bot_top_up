@@ -28,14 +28,15 @@ class PricingService:
 
     cbr_url = "https://www.cbr.ru/scripts/XML_daily.asp"
 
-    def __init__(self, resell: ResellClient, markup_percent: float, rounding: int):
+    def __init__(self, resell: ResellClient, markup_percent: float, rounding: int, proxy: str | None = None):
         self.resell = resell
         self.markup = Decimal(str(markup_percent))
         self.rounding = Decimal(rounding)
+        self.proxy = proxy
         self.session: aiohttp.ClientSession | None = None
 
     async def start(self) -> None:
-        self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15))
+        self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15), proxy=self.proxy)
 
     async def close(self) -> None:
         if self.session:
