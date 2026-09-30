@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+import re
 from decimal import Decimal
 from pathlib import Path
 
@@ -29,6 +30,7 @@ class PricingAndAuditTests(unittest.IsolatedAsyncioTestCase):
         await self.database.set_supplier_result(order_id, 77, "processing", "1.0100")
         await self.database.update_supplier_status(order_id, "completed")
         saved = await self.database.get_order(order_id)
+        self.assertRegex(saved["public_id"], r"^NT-\d{6}-\d{4}-[A-Z0-9]{5}$")
         self.assertEqual(saved["price_rub"], 120)
         self.assertEqual(saved["supplier_cost_usd"], "1.0100")
         actions = [event["action"] for event in await self.database.audit_events(order_id)]

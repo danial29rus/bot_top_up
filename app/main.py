@@ -75,6 +75,10 @@ def quantity_buttons(kind: str, values: list[int]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def order_reference(order: dict) -> str:
+    return order.get("public_id") or f"#{order['id']}"
+
+
 def order_text(order: dict) -> str:
     names = {"steam": "Steam", "stars": "Telegram Stars", "premium": "Telegram Premium"}
     statuses = {
@@ -95,7 +99,8 @@ def order_text(order: dict) -> str:
         price = f"${order['price_usd']}"
     else:
         price = "уточняется администратором"
-    return f"Заявка #{order['id']}\nУслуга: {names[order['product']]}\nК оплате: {price}\nСтатус: {statuses.get(order['status'], order['status'])}\nСоздана: {order['created_at']} UTC"
+    reference = order_reference(order)
+    return f"Заявка {reference}\nУслуга: {names[order['product']]}\nК оплате: {price}\nСтатус: {statuses.get(order['status'], order['status'])}\nСоздана: {order['created_at']} UTC"
 
 
 def order_details(order: dict) -> str:
@@ -214,12 +219,13 @@ async def create_local_order(message: Message, product: str, payload: dict, quot
         payment_state = "<b>Статус: ⏳ Ожидает подтверждения оплаты</b>\nПосле оплаты нажмите кнопку — оператор проверит поступление."
     else:
         payment_state = "<b>Статус: ⏳ Ожидает подключения оплаты</b>\nЗаявка сохранена в личном кабинете. Приём оплаты пока не подключён."
-    text = f"Заявка #{order_id} создана.\n{price_line}\n{payment_state}"
+    created_order = await db.get_order(order_id)
+    text = f"Заявка {created_order['public_id']} создана.\n{price_line}\n{payment_state}"
     if replace:
         await replace_view(message, text, keyboard)
     else:
         await message.answer(text, reply_markup=keyboard)
-    await notify_admins(message.bot, f"Новая заявка\n{order_text((await db.get_order(order_id)))}\nПользователь: @{user.username or 'без username'} ({user.id})")
+    await notify_admins(message.bot, f"Новая заявка\n{order_text(created_order)}\nПользователь: @{user.username or 'без username'} ({user.id})")
 
 
 @router.message(CommandStart())
@@ -734,7 +740,7 @@ async def set_price(message: Message) -> None:
     order = await db.get_order(order_id)
     await message.bot.send_message(
         order["user_id"],
-        f"Для заявки #{order_id} сумма к оплате: <b>{price:,} ₽</b>.\nСтатус: ожидает подключения оплаты.".replace(",", " "),
+        f"Для заявки {order_reference(order)} сумма к оплате: <b>{price:,} ₽</b>.\nСтатус: ожидает подключения оплаты.".replace(",", " "),
         reply_markup=payment_keyboard(order_id),
     )
     await message.answer("Цена установлена, клиент уведомлён.")
@@ -806,8 +812,8 @@ async def confirm_payment(call: CallbackQuery) -> None:
         await call.answer()
         return
     current = await db.get_order(order_id)
-    await replace_view(call.message, f"Заявка #{order_id} отправлена в Resell, номер поставщика #{supplier['number']}.", InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="← Главное меню", callback_data="back:main")]]))
-    await call.bot.send_message(order["user_id"], f"Оплата по заявке #{order_id} подтверждена. Выполняем заказ; статус: {current['status']}.")
+    await replace_view(call.message, f"Заявка {order_reference(order)} отправлена в Resell, номер поставщика #{supplier['number']}.", InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="← Главное меню", callback_data="back:main")]]))
+    await call.bot.send_message(order["user_id"], f"Оплата по заявке {order_reference(order)} подтверждена. Выполняем заказ; статус: {current['status']}.")
     await call.answer("Заказ отправлен")
 
 
@@ -821,7 +827,7 @@ async def poll_orders(bot: Bot) -> None:
                     continue
                 error = supplier.get("status_reason") or supplier.get("fail_code")
                 await db.update_supplier_status(order["id"], new_status, error)
-                text = f"Заявка #{order['id']}: статус изменён на {new_status.lower()}."
+                text = f"Заявка {order_reference(order)}: статус изменён на {new_status.lower()}."
                 if error:
                     text += f" Причина: {error}"
                 await bot.send_message(order["user_id"], text)

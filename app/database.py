@@ -3,6 +3,8 @@ from __future__ import annotations
 import aiosqlite
 import json
 from pathlib import Path
+import secrets
+from datetime import datetime, timezone
 from typing import Any
 
 
@@ -30,6 +32,7 @@ class Database:
                 );
                 CREATE TABLE IF NOT EXISTS orders (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    public_id TEXT,
                     user_id INTEGER NOT NULL,
                     username TEXT,
                     product TEXT NOT NULL,
@@ -77,6 +80,8 @@ class Database:
                 """
             )
             await self._ensure_order_columns(db)
+            await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS orders_public_id_idx ON orders(public_id)")
+            await self._backfill_public_ids(db)
             await db.commit()
 
     @staticmethod
@@ -89,10 +94,29 @@ class Database:
             "markup_percent": "TEXT",
             "price_rub": "INTEGER",
             "price_source": "TEXT",
+            "public_id": "TEXT",
         }
         for column, definition in additions.items():
             if column not in existing:
                 await db.execute(f"ALTER TABLE orders ADD COLUMN {column} {definition}")
+
+    @staticmethod
+    def _public_id() -> str:
+        now = datetime.now(timezone.utc)
+        suffix = secrets.token_urlsafe(4).upper().replace("-", "X").replace("_", "Y")[:5]
+        return f"NT-{now:%y%m%d-%H%M}-{suffix}"
+
+    async def _backfill_public_ids(self, db: aiosqlite.Connection) -> None:
+        rows = await (await db.execute("SELECT id FROM orders WHERE public_id IS NULL OR public_id=''" )).fetchall()
+        for (order_id,) in rows:
+            for _ in range(3):
+                try:
+                    await db.execute("UPDATE orders SET public_id=? WHERE id=?", (self._public_id(), order_id))
+                    break
+                except aiosqlite.IntegrityError:
+                    continue
+            else:
+                raise RuntimeError("Не удалось обновить публичный номер заявки")
 
     async def upsert_user(self, user_id: int, username: str | None, first_name: str | None) -> None:
         async with aiosqlite.connect(self.path) as db:
@@ -157,15 +181,23 @@ class Database:
         status: str = "awaiting_payment",
     ) -> int:
         async with aiosqlite.connect(self.path) as db:
-            cursor = await db.execute(
-                """INSERT INTO orders(user_id, username, product, payload, supplier_cost_usd, usd_rub_rate,
-                   markup_percent, price_rub, price_source, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (user_id, username, product, json.dumps(payload, ensure_ascii=False), supplier_cost_usd, usd_rub_rate, markup_percent, price_rub, price_source, status),
-            )
+            for _ in range(3):
+                public_id = self._public_id()
+                try:
+                    cursor = await db.execute(
+                        """INSERT INTO orders(public_id, user_id, username, product, payload, supplier_cost_usd, usd_rub_rate,
+                           markup_percent, price_rub, price_source, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (public_id, user_id, username, product, json.dumps(payload, ensure_ascii=False), supplier_cost_usd, usd_rub_rate, markup_percent, price_rub, price_source, status),
+                    )
+                    break
+                except aiosqlite.IntegrityError:
+                    continue
+            else:
+                raise RuntimeError("Не удалось сгенерировать уникальный номер заявки")
             await self._event(db, int(cursor.lastrowid), user_id, user_id, "order_created", {
                 "product": product, "payload": payload, "supplier_cost_usd": supplier_cost_usd,
                 "usd_rub_rate": usd_rub_rate, "markup_percent": markup_percent, "price_rub": price_rub,
-                "price_source": price_source, "status": status,
+                "price_source": price_source, "public_id": public_id, "status": status,
             })
             await db.commit()
             return int(cursor.lastrowid)
