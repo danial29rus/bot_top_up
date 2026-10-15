@@ -26,6 +26,7 @@ settings: Settings
 db: Database
 resell: ResellClient
 pricing: PricingService
+CHANNEL_URL = "https://t.me/igromaniya_03"
 
 
 def menu() -> InlineKeyboardMarkup:
@@ -34,6 +35,7 @@ def menu() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="⭐ Купить Telegram Stars", callback_data="new:stars")],
         [InlineKeyboardButton(text="✨ Telegram Premium", callback_data="new:premium")],
         [InlineKeyboardButton(text="👤 Личный кабинет", callback_data="cabinet")],
+        [InlineKeyboardButton(text="📢 Наш канал", url=CHANNEL_URL)],
         [InlineKeyboardButton(text="📄 Документы и правила", callback_data="documents"), InlineKeyboardButton(text="💬 Поддержка", callback_data="support")],
     ])
 
