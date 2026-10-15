@@ -14,8 +14,8 @@ class Settings:
     database_path: str
     payment_enabled: bool
     markup_percent: float
+    max_order_amount_rub: int
     poll_seconds: int
-    operator_name: str
     policy_revision: str
     data_retention_days: int
     topup_banner_path: str
@@ -44,9 +44,9 @@ def load_settings() -> Settings:
         database_path=os.getenv("DATABASE_PATH", "data/bot.sqlite3"),
         payment_enabled=os.getenv("PAYMENT_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"},
         markup_percent=float(os.getenv("PRICE_MARKUP_PERCENT", "10")),
+        max_order_amount_rub=max(1, int(os.getenv("MAX_ORDER_AMOUNT_RUB", "10000"))),
         poll_seconds=max(10, int(os.getenv("ORDER_POLL_SECONDS", "20"))),
-        operator_name=os.getenv("OPERATOR_NAME", "Владелец сервиса NovaTop"),
-        policy_revision=os.getenv("POLICY_REVISION", "30.06.2026"),
+        policy_revision=os.getenv("POLICY_REVISION", "15.10.2026"),
         data_retention_days=max(1, int(os.getenv("DATA_RETENTION_DAYS", "365"))),
         topup_banner_path=os.getenv("TOPUP_BANNER_PATH", "/app/assets/topup-banner.png"),
         cabinet_banner_path=os.getenv("CABINET_BANNER_PATH", "/app/assets/cabinet-banner.png"),

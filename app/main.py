@@ -16,7 +16,7 @@ from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton, Inli
 
 from .config import Settings, load_settings
 from .database import Database
-from .legal import payment_and_refunds, privacy_policy, service_rules, terms_of_service
+from .legal import payment_and_refunds, privacy_policy, service_rules, tariffs_and_limits, terms_of_service
 from .pricing import PricingError, PricingService, Quote
 from .resell import ResellClient, ResellError
 from .states import PremiumOrder, SteamOrder, SupportDialog
@@ -54,11 +54,12 @@ def documents_menu(need_acceptance: bool = False) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="🔒 Конфиденциальность", callback_data="doc:privacy")],
         [InlineKeyboardButton(text="📜 Пользовательское соглашение", callback_data="doc:terms")],
         [InlineKeyboardButton(text="↩️ Оплата и возвраты", callback_data="doc:refunds")],
+        [InlineKeyboardButton(text="💳 Тарифы и лимиты", callback_data="doc:tariffs")],
         [InlineKeyboardButton(text="🛡 Правила сервиса", callback_data="doc:rules")],
     ]
     if need_acceptance:
         rows.append([InlineKeyboardButton(text="✅ Принимаю документы", callback_data="terms:accept")])
-    rows.append([InlineKeyboardButton(text="← Главное меню", callback_data="back:main")])
+    rows.append([InlineKeyboardButton(text="💬 Поддержка", callback_data="support"), InlineKeyboardButton(text="← Главное меню", callback_data="back:main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -174,7 +175,7 @@ async def send_banner(message: Message, path: str, caption: str, markup: InlineK
 
 
 async def show_main_menu(message: Message, replace: bool = False) -> None:
-    caption = "<b>NovaTop</b>\n\n<b>Больше игр. Меньше ожидания.</b>\nПополняйте кошелёк Steam по логину — пароль не нужен. Следите за каждой заявкой в личном кабинете.\n\n<i>Оплата проверяется оператором вручную.</i>"
+    caption = "<b>NovaTop</b>\n\n<b>Больше игр. Меньше ожидания.</b>\nПополняйте кошелёк Steam по логину — пароль не нужен, или подключайте Telegram Premium. Итоговая цена в ₽ показывается до оплаты.\n\n<i>Оплата проверяется вручную. Лимит одного платежа — 10 000 ₽.</i>\n<code>OPLAT</code>"
     if replace:
         await replace_view(message, caption, menu())
         return
@@ -201,6 +202,14 @@ async def show_cabinet(message: Message, user_id: int, replace: bool = False) ->
 
 
 async def create_local_order(message: Message, product: str, payload: dict, quote: Quote, customer=None, replace: bool = False) -> None:
+    if quote.price_rub > settings.max_order_amount_rub:
+        limit = f"{settings.max_order_amount_rub:,}".replace(",", " ")
+        text = f"Стоимость услуги — <b>{quote.price_rub:,} ₽</b>, это превышает лимит одной заявки — <b>{limit} ₽</b>. Выберите меньшую сумму или обратитесь в поддержку.".replace(",", " ")
+        if replace:
+            await replace_view(message, text, menu())
+        else:
+            await message.answer(text, reply_markup=menu())
+        return
     user = customer or message.from_user
     order_id = await db.create_order(
         user.id,
@@ -314,6 +323,7 @@ async def document(call: CallbackQuery) -> None:
         "privacy": privacy_policy,
         "terms": terms_of_service,
         "refunds": payment_and_refunds,
+        "tariffs": tariffs_and_limits,
         "rules": service_rules,
     }
     document_id = call.data.split(":", 1)[1]
@@ -704,10 +714,11 @@ async def set_price(message: Message) -> None:
     try:
         order_id = int(parts[1])
         price = int(parts[2])
-        if price <= 0:
+        if price <= 0 or price > settings.max_order_amount_rub:
             raise ValueError
     except (InvalidOperation, ValueError):
-        await message.answer("Номер и сумма должны быть положительными числами.")
+        limit = f"{settings.max_order_amount_rub:,}".replace(",", " ")
+        await message.answer(f"Номер и сумма должны быть положительными числами; максимум для одной заявки — {limit} ₽.")
         return
     if not await db.set_price(order_id, price, message.from_user.id):
         await message.answer("Нельзя изменить цену этой заявки.")
