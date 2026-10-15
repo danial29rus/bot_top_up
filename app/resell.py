@@ -79,21 +79,6 @@ class ResellClient:
                     continue
         raise LookupError
 
-    async def telegram_stars_price(self, quantity: int) -> Decimal:
-        data = await self._request("GET", "/telegram/stars")
-        # The Stars endpoint currently returns one unit price, not an offer list:
-        # {"price_per_star": "0.0152250", "min": 50, "max": 10000}.
-        if data.get("price_per_star") is not None:
-            minimum = int(data.get("min", 50))
-            maximum = int(data.get("max", 10000))
-            if not minimum <= quantity <= maximum:
-                raise ResellError(f"Количество Stars должно быть от {minimum} до {maximum}")
-            return Decimal(str(data["price_per_star"])) * quantity
-        try:
-            return self._price_from_catalogue(data, "quantity", quantity)
-        except (LookupError, ArithmeticError) as exc:
-            raise ResellError("Текущая цена выбранного количества Stars не найдена") from exc
-
     async def telegram_premium_price(self, months: int) -> Decimal:
         data = await self._request("GET", "/telegram/premium")
         try:

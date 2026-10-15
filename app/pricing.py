@@ -74,8 +74,5 @@ class PricingService:
             raise PricingError("Валюта Steam сейчас недоступна") from exc
         return self.retail_quote(nominal_usd, await self.usd_rub(), "steam_face_value")
 
-    async def stars_quote(self, quantity: int) -> Quote:
-        return self.retail_quote(await self.resell.telegram_stars_price(quantity), await self.usd_rub(), "resell_telegram_stars")
-
     async def premium_quote(self, months: int) -> Quote:
         return self.retail_quote(await self.resell.telegram_premium_price(months), await self.usd_rub(), "resell_telegram_premium")

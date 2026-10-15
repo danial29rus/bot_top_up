@@ -21,8 +21,8 @@ class PricingAndAuditTests(unittest.IsolatedAsyncioTestCase):
     async def test_order_keeps_quote_and_audit_chain(self):
         await self.database.upsert_user(10, "buyer", "Buyer")
         order_id = await self.database.create_order(
-            10, "buyer", "stars", {"telegram_username": "buyer", "quantity": 100},
-            "1.0100", "100.0000", "10", 120, "resell_telegram_stars",
+            10, "buyer", "premium", {"telegram_username": "buyer", "months": 3},
+            "1.0100", "100.0000", "10", 120, "resell_telegram_premium",
         )
         self.assertTrue(await self.database.mark_payment_review(order_id, 10))
         order = await self.database.claim_for_creation(order_id, 99)
@@ -44,12 +44,12 @@ class PricingAndAuditTests(unittest.IsolatedAsyncioTestCase):
         quote = service.retail_quote(Decimal("1.01"), Decimal("100"), "test")
         self.assertEqual(quote.price_rub, 120)
 
-    async def test_stars_unit_price_is_multiplied_by_quantity(self):
+    async def test_premium_price_is_selected_from_catalogue(self):
         class TestResell(ResellClient):
             async def _request(self, method, path, payload=None):
-                return {"object": "telegram_stars_pricing", "price_per_star": "0.0152250", "min": 50, "max": 10000}
+                return {"offers": [{"months": 3, "price_usd": "9.99"}]}
 
-        self.assertEqual(await TestResell("unused").telegram_stars_price(50), Decimal("0.7612500"))
+        self.assertEqual(await TestResell("unused").telegram_premium_price(3), Decimal("9.99"))
 
     async def test_support_ticket_keeps_conversation_in_sqlite(self):
         ticket_id = await self.database.create_support_ticket(10, "Где моя заявка?")

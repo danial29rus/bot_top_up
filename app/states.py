@@ -7,11 +7,6 @@ class SteamOrder(StatesGroup):
     amount = State()
 
 
-class StarsOrder(StatesGroup):
-    username = State()
-    quantity = State()
-
-
 class PremiumOrder(StatesGroup):
     username = State()
     months = State()

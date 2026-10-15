@@ -19,7 +19,7 @@ from .database import Database
 from .legal import payment_and_refunds, privacy_policy, service_rules, terms_of_service
 from .pricing import PricingError, PricingService, Quote
 from .resell import ResellClient, ResellError
-from .states import PremiumOrder, StarsOrder, SteamOrder, SupportDialog
+from .states import PremiumOrder, SteamOrder, SupportDialog
 
 router = Router()
 settings: Settings
@@ -32,7 +32,6 @@ CHANNEL_URL = "https://t.me/igromaniya_03"
 def menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💳 Пополнить Steam", callback_data="new:steam")],
-        [InlineKeyboardButton(text="⭐ Купить Telegram Stars", callback_data="new:stars")],
         [InlineKeyboardButton(text="✨ Telegram Premium", callback_data="new:premium")],
         [InlineKeyboardButton(text="👤 Личный кабинет", callback_data="cabinet")],
         [InlineKeyboardButton(text="📢 Наш канал", url=CHANNEL_URL)],
@@ -591,11 +590,9 @@ async def steam_amount(message: Message, state: FSMContext) -> None:
 
 
 @router.callback_query(F.data == "new:stars")
-async def stars_start(call: CallbackQuery, state: FSMContext) -> None:
-    if not await can_order(call):
-        return
-    await state.set_state(StarsOrder.username)
-    await replace_view(call.message, "Введите username получателя Stars, например @username.", InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="← Главное меню", callback_data="back:main")]]))
+async def stars_unavailable(call: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await replace_view(call.message, "Telegram Stars сейчас недоступны. Выберите Steam или Telegram Premium.", menu())
     await call.answer()
 
 
@@ -614,32 +611,6 @@ async def receive_telegram_username(
     await state.set_state(next_state)
     await message.answer(prompt, reply_markup=keyboard)
     return True
-
-
-@router.message(StarsOrder.username)
-async def stars_username(message: Message, state: FSMContext) -> None:
-    await receive_telegram_username(
-        message,
-        state,
-        StarsOrder.quantity,
-        "Выберите количество Stars:",
-        quantity_buttons("stars", [50, 100, 250, 500, 1000, 2500]),
-    )
-
-
-@router.callback_query(StarsOrder.quantity, F.data.startswith("stars:"))
-async def stars_quantity(call: CallbackQuery, state: FSMContext) -> None:
-    quantity = int(call.data.split(":", 1)[1])
-    data = await state.get_data()
-    try:
-        quote = await pricing.stars_quote(quantity)
-    except (ResellError, PricingError):
-        await replace_view(call.message, "Не удалось получить актуальную цену Stars. Попробуйте позднее.", menu())
-        await call.answer()
-        return
-    await create_local_order(call.message, "stars", {"telegram_username": data["username"], "quantity": quantity}, quote, call.from_user, replace=True)
-    await state.clear()
-    await call.answer()
 
 
 @router.callback_query(F.data == "new:premium")
@@ -662,9 +633,11 @@ async def premium_username(message: Message, state: FSMContext) -> None:
     )
 
 
-@router.message(StarsOrder.quantity)
-async def stars_quantity_text(message: Message) -> None:
-    await message.answer("Выберите количество кнопкой ниже.", reply_markup=quantity_buttons("stars", [50, 100, 250, 500, 1000, 2500]))
+@router.callback_query(F.data.startswith("stars:"))
+async def stars_quantity_unavailable(call: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await replace_view(call.message, "Telegram Stars сейчас недоступны. Выберите Steam или Telegram Premium.", menu())
+    await call.answer()
 
 
 @router.message(PremiumOrder.months)
