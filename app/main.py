@@ -158,6 +158,9 @@ async def replace_view(message: Message, text: str, markup: InlineKeyboardMarkup
     """One-screen navigation: callbacks edit the active card instead of creating chat noise."""
     try:
         if message.photo:
+            if len(text) > 1024:
+                await message.answer(text, reply_markup=markup)
+                return
             await message.edit_caption(caption=text[:1024], reply_markup=markup)
         else:
             await message.edit_text(text, reply_markup=markup)
